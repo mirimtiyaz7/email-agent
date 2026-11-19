@@ -1,0 +1,18 @@
+# Optional: lets Render set up the service automatically from your GitHub repo.
+# You can also skip this file and enter the same values by hand in the Render dashboard.
+services:
+  - type: web
+    name: email-triage-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # 1 worker so the in-memory rate limit and demo cache work correctly;
+    # threads handle several visitors; timeout allows for slow AI responses.
+    startCommand: gunicorn server:app --workers 1 --threads 4 --timeout 90
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false   # you enter this value in the Render dashboard, never in the file

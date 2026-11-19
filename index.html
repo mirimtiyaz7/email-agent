@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Triage Agent</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --border: #334155; --text: #e2e8f0;
+    --muted: #94a3b8; --accent: #6366f1; --accent-hover: #818cf8;
+    --red: #ef4444; --orange: #f97316; --green: #22c55e; --blue: #3b82f6;
+    --gray: #64748b; --purple: #a855f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         background: var(--bg); color: var(--text); line-height: 1.5; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { margin: 0 0 4px; font-size: 1.8rem; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+         padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: .95rem; }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn { background: var(--accent); color: #fff; border: 0; padding: 10px 18px;
+         border-radius: 8px; cursor: pointer; font-size: .95rem; }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: .6; cursor: wait; }
+  .btn.small { padding: 6px 12px; font-size: .85rem; }
+  .btn.ok { background: var(--green); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .stat .num { font-size: 1.8rem; font-weight: 700; }
+  .stat .lbl { color: var(--muted); font-size: .85rem; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-left: 5px solid var(--gray);
+          border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .card.u5, .card.u4 { border-left-color: var(--red); }
+  .card.u3 { border-left-color: var(--orange); }
+  .card.u2, .card.u1 { border-left-color: var(--green); }
+  .row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .subject { font-weight: 600; }
+  .from { color: var(--muted); font-size: .85rem; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .badge { font-size: .75rem; padding: 2px 10px; border-radius: 999px; background: var(--border); }
+  .badge.urgent { background: var(--red); } .badge.billing { background: var(--orange); }
+  .badge.sales { background: var(--green); color: #052e16; } .badge.support { background: var(--blue); }
+  .badge.spam { background: #000; } .badge.newsletter { background: var(--gray); }
+  .badge.other { background: var(--purple); } .badge.human { background: #facc15; color: #422006; }
+  .summary { margin: 6px 0 10px; }
+  textarea, input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+                    border-radius: 8px; padding: 10px; font: inherit; margin-bottom: 10px; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+  .msg { padding: 12px; border-radius: 8px; background: #7f1d1d; margin: 12px 0; }
+  .note { color: var(--green); font-size: .85rem; margin-left: 8px; }
+  .hidden { display: none; }
+  footer { margin-top: 40px; color: var(--muted); font-size: .85rem; text-align: center; }
+  footer a { color: var(--accent-hover); }
+  @media (max-width: 600px) { .stats { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📧 Email Triage Agent</h1>
+  <p class="sub">AI sorts emails by urgency and drafts replies. Nothing is ever sent automatically.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="demo">Demo inbox</button>
+    <button class="tab" data-tab="own">Try your own email</button>
+  </div>
+
+  <section id="tab-demo">
+    <button class="btn" id="runDemo">Run triage on demo emails</button>
+    <div id="demoError"></div>
+    <div class="stats hidden" id="stats">
+      <div class="stat"><div class="num" id="sTotal">0</div><div class="lbl">Emails analyzed</div></div>
+      <div class="stat"><div class="num" id="sUrgent">0</div><div class="lbl">High urgency (4-5)</div></div>
+      <div class="stat"><div class="num" id="sHuman">0</div><div class="lbl">Needs human review</div></div>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section id="tab-own" class="hidden">
+    <label for="fFrom">From</label>
+    <input id="fFrom" value="customer@example.com">
+    <label for="fSubject">Subject</label>
+    <input id="fSubject" value="Need a quote for a website">
+    <label for="fBody">Body</label>
+    <textarea id="fBody" rows="6">Hi, we need a 5 page website for our shop. What is the cost?</textarea>
+    <button class="btn" id="analyze">Analyze this email</button>
+    <div id="ownError"></div>
+    <div id="ownResult" style="margin-top:16px"></div>
+  </section>
+
+  <footer>
+    Built by Imtiyaz &middot;
+    <a href="https://services.imtiyazmir.com" target="_blank" rel="noopener">services.imtiyazmir.com</a>
+  </footer>
+</div>
+
+<script>
+const API_DEMO = "{{ url_for('api_demo') }}";
+const API_ANALYZE = "{{ url_for('api_analyze') }}";
+
+// Build elements safely (textContent only, so email text can never inject HTML)
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function renderCard(r) {
+  const card = el("div", "card u" + r.urgency);
+
+  const top = el("div", "row");
+  const left = el("div");
+  left.appendChild(el("div", "subject", r.subject));
+  left.appendChild(el("div", "from", r.from));
+  top.appendChild(left);
+  top.appendChild(el("strong", "", r.urgency + "/5"));
+  card.appendChild(top);
+
+  const badges = el("div", "badges");
+  badges.appendChild(el("span", "badge " + r.category, r.category));
+  if (r.needs_human) badges.appendChild(el("span", "badge human", "Needs human"));
+  card.appendChild(badges);
+
+  card.appendChild(el("div", "summary", r.summary));
+
+  if (r.draft_reply) {
+    const ta = el("textarea");
+    ta.rows = 4;
+    ta.value = r.draft_reply;
+    card.appendChild(ta);
+    const btn = el("button", "btn small", "Approve draft");
+    const note = el("span", "note");
+    btn.onclick = () => {
+      btn.classList.add("ok");
+      note.textContent = "Approved. A full version would send it from here.";
+    };
+    card.appendChild(btn);
+    card.appendChild(note);
+  }
+  return card;
+}
+
+async function callApi(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+}
+
+// Tabs
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  document.getElementById("tab-demo").classList.toggle("hidden", t.dataset.tab !== "demo");
+  document.getElementById("tab-own").classList.toggle("hidden", t.dataset.tab !== "own");
+});
+
+// Demo inbox
+document.getElementById("runDemo").onclick = async function () {
+  const btn = this, err = document.getElementById("demoError");
+  err.replaceChildren();
+  btn.disabled = true; btn.textContent = "Analyzing...";
+  try {
+    const results = await callApi(API_DEMO);
+    document.getElementById("stats").classList.remove("hidden");
+    document.getElementById("sTotal").textContent = results.length;
+    document.getElementById("sUrgent").textContent = results.filter(r => r.urgency >= 4).length;
+    document.getElementById("sHuman").textContent = results.filter(r => r.needs_human).length;
+    const box = document.getElementById("results");
+    box.replaceChildren(...results.map(renderCard));
+  } catch (e) {
+    err.appendChild(el("div", "msg", e.message));
+  }
+  btn.disabled = false; btn.textContent = "Run triage on demo emails";
+};
+
+// Your own email
+document.getElementById("analyze").onclick = async function () {
+  const btn = this, err = document.getElementById("ownError");
+  const out = document.getElementById("ownResult");
+  err.replaceChildren(); out.replaceChildren();
+  btn.disabled = true; btn.textContent = "Thinking...";
+  try {
+    const r = await callApi(API_ANALYZE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: document.getElementById("fFrom").value,
+        subject: document.getElementById("fSubject").value,
+        body: document.getElementById("fBody").value,
+      }),
+    });
+    out.appendChild(renderCard(r));
+  } catch (e) {
+    err.appendChild(el("div", "msg", e.message));
+  }
+  btn.disabled = false; btn.textContent = "Analyze this email";
+};
+</script>
+</body>
+</html>
